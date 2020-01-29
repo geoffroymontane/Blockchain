@@ -1,0 +1,23 @@
+[
+    {
+        "hash": -,
+        "nounce":,
+        "last":,
+        "timestamp":,
+        "autority":,
+        "entries": [
+                    {
+                        "hash":,
+                        "timestamp":,
+                        "type":,
+                        "author": 
+                    },
+                    {
+                        "hash":,
+                        "timestamp":,
+                        "type":,
+                        "author": 
+                    }
+                   ]
+    }
+]
