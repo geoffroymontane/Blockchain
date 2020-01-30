@@ -1,7 +1,8 @@
 import json
 from hashlib import sha256
-from time import time
+from time import time as getTime
 from flask import Flask, jsonify, request
+from math import floor
 import requests
 import threading
 import random
@@ -34,6 +35,10 @@ blockSize = 3
 newBlock = {}
 
 memoryPool = {}
+
+
+def time():
+    return floor(getTime())
 
 
 #
@@ -83,7 +88,12 @@ def avgTimestamp(block):
        sum += entry["timestamp"] 
 
     sum //= len(block["entries"])
+
     return sum
+
+def expoAvgTimestamp(avg, block):
+    sum = avgTimestamp(block) 
+    return 0.9 * avg  + 0.1 * sum
 
 
 def checkBlockchain(blockchain):
@@ -96,6 +106,9 @@ def checkBlockchain(blockchain):
 
     # Remonter la chaîne en vérifiant les hash et les timestamps
     current = root
+    currentAvgTimestamp = avgTimestamp(root) // 2
+    length = 1
+
     correct = True
     while True: 
         for hash in blockchain:
@@ -103,8 +116,18 @@ def checkBlockchain(blockchain):
                 current = hash
 
                 correct = correct and checkBlock(current, blockchain[current])
+                correct = correct and avgTimestamp(current) > currentAvgTimestamp
+
+                currentAvgTimestamp = expoAvgTimestamp(currentAvgTimestamp, current)
+                length += 1
+
+                if not correct:
+                    return False
+
+    correct = correct and length = len(blockchain)
 
 
+    return correct, length
 
 class Miner (threading.Thread):
 
@@ -129,9 +152,10 @@ class Miner (threading.Thread):
 
             newBlock = {}
             memoryPoolKeys = list(memoryPool.keys())
+            newBlock["entries"] = []
             for i in range(blockSize):
-                newBlock["entries"] = []
                 newBlock["entries"].append(memoryPool.pop(memoryPoolKeys[i]))
+            random.shuffle(newBlock["entries"])
 
             newBlock["timestamp"] = time() 
             newBlock["last"] = lastBlockHash
