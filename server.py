@@ -6,6 +6,7 @@ from math import floor
 import requests
 import threading
 import random
+import sys
 app = Flask(__name__)
 
 
@@ -20,10 +21,12 @@ app = Flask(__name__)
 
 
 
-
 name = ""
-___port = 5000
+___ip = ""
+___port = 0
 
+
+neighbors = []
 
 blockchain = {}
 entriesHash = []
@@ -31,45 +34,18 @@ lastBlockHash = ""
 
 blockSize = 3
 
+miningSafe = True
 
 newBlock = {}
 
 memoryPool = {}
 
 
+miner = ""
+
+
 def time():
     return floor(getTime())
-
-
-#
-# API
-#
-
-@app.route("/addEntry", methods=['POST'])
-def addEntry():
-
-    data = request.form
-    hash =  data.get("hash")
-
-    if hash not in memoryPool and hash not in entriesHash:
-
-        entry = {"hash": hash, "timestamp": time()}
-
-        memoryPool[hash] = entry
-
-        print("----")
-        print("New entry: ")
-        print(str(len(memoryPool)) + " / " + str(blockSize))
-        print("----")
-
-        return "Done"
-
-    return "Error"
-
-
-@app.route("/show", methods=['GET'])
-def showEntries():
-    return json.dumps(blockchain)
 
 
 
@@ -106,33 +82,41 @@ def checkBlockchain(blockchain):
 
     # Remonter la chaîne en vérifiant les hash et les timestamps
     current = root
-    currentAvgTimestamp = avgTimestamp(root) // 2
+    currentAvgTimestamp = avgTimestamp(blockchain[root]) // 2
     length = 1
 
     correct = True
     while True: 
+        hasAParent = False
         for hash in blockchain:
             if blockchain[hash]["last"] == current:
                 current = hash
 
                 correct = correct and checkBlock(current, blockchain[current])
-                correct = correct and avgTimestamp(current) > currentAvgTimestamp
+                correct = correct and avgTimestamp(blockchain[current]) > currentAvgTimestamp
 
-                currentAvgTimestamp = expoAvgTimestamp(currentAvgTimestamp, current)
+                currentAvgTimestamp = expoAvgTimestamp(currentAvgTimestamp, blockchain[current])
                 length += 1
+            
+                hasAParent = True
+                break
+        if not hasAParent:
+            break
 
-                if not correct:
-                    return False
-
-    correct = correct and length = len(blockchain)
+    correct = correct and (length == len(blockchain))
 
 
+    print(correct)
+    print(length)
     return correct, length
 
 class Miner (threading.Thread):
 
     def __init__(self):
       threading.Thread.__init__(self)
+
+    def stop(self):
+        self._stop_event.set()
 
     def run(self):
         global blockchain
@@ -144,6 +128,9 @@ class Miner (threading.Thread):
         while True:
             
             while len(memoryPool) < blockSize:
+                continue
+
+            if not miningSafe:
                 continue
 
             print("----")
@@ -161,15 +148,26 @@ class Miner (threading.Thread):
             newBlock["last"] = lastBlockHash
             newBlock["autority"] = name
 
+            if not miningSafe:
+                continue
+
             # Défi
             newBlock["nounce"] = random.randint(0, 999999999)
             hash = sha256(json.dumps(newBlock).encode("utf-8")).hexdigest()
-            while hash[0:5] != "00000":
+            while hash[0:5] != "00000" and miningSafe:
 
                 newBlock["nounce"] += 1
                 hash = sha256(json.dumps(newBlock).encode("utf-8")).hexdigest()
+
+            if not miningSafe:
+                continue
+
+            for block in blockchain:
+                for entry in blockchain[block]["entries"]:
+                    if entry in entriesHash:
+                        continue
             
-            lastBlockHash = hash
+            lastBlockHash_ = hash
             blockchain[hash] = newBlock
 
             for entry in newBlock["entries"]:
@@ -179,11 +177,102 @@ class Miner (threading.Thread):
             print("Mined")
             print("----")
 
+            for neighbor in neighbors:
+                ip = str(neighbor["ip"])
+                port = str(neighbor["port"])
+                r = requests.post(url = "http://" + ip + ":" + port + "/submitBlockchain",
+                json = blockchain)
+
+#
+# API
+#
+
+@app.route("/addEntry", methods=['POST'])
+def addEntry():
+
+    data = request.form
+    hash =  data.get("hash")
+
+    if hash not in memoryPool and hash not in entriesHash:
+
+        entry = {"hash": hash, "timestamp": time()}
+
+        memoryPool[hash] = entry
+
+        for neighbor in neighbors:
+            ip = str(neighbor["ip"])
+            port = str(neighbor["port"])
+            r = requests.post(url = "http://" + ip + ":" + port + "/addEntry",
+            data = {"hash": hash}) 
+
+        print("----")
+        print("New entry: ")
+        print(str(len(memoryPool)) + " / " + str(blockSize))
+        print("----")
+
+        return "Done"
+
+    return "Error"
+
+
+@app.route("/show", methods=['GET'])
+def showEntries():
+    return json.dumps(blockchain)
+
+
+@app.route("/submitBlockchain", methods=['POST'])
+def submitBlockchain():
+    global blockchain
+    blockchain_ = request.json  
+
+    print("New blockchain received") 
+
+    check = checkBlockchain(blockchain_)
+    if check[0] and check[1] > len(blockchain):
+        miningSafe = False
+        print("Blockchain switching...") 
+
+        blockchain = blockchain_ 
+
+        # Trouver la racine
+        for hash in blockchain:
+            if blockchain[hash]["last"] == "":
+                root = hash
+                break
+
+        current = root
+        while True: 
+            hasAParent = False
+            for entry in blockchain[current]["entries"]:
+                entriesHash.append(entry["hash"])
+            for hash in blockchain:
+                if blockchain[hash]["last"] == current:
+                    current = hash
+                    hasAParent = True
+            if not hasAParent:
+                break
+
+        lastBlockHash = current
+
+        memoryPool = {}
+        newBlock = {}
+
+        miningSafe = True
+        return "Done"
+
+    return "Error"
 
 if __name__ == '__main__':
+
+    ___ip = input("IP : ")
+    ___port = input("Port : ")
+
+
+    neighbors = [{"ip": input("Voisin IP : "), "port": input("Voisin Port: ")}]
+
 
     miner = Miner()
     miner.start()
 
-    app.run(host='127.0.0.1', port=5000)   
+    app.run(host=___ip, port = ___port)   
     

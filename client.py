@@ -2,14 +2,35 @@ from hashlib import sha256
 from time import time
 import sys
 import requests
+from GUI import *
 
+author = ''
+filename = ''
+type = ''
 
+def storeString1(inString):
+    global author
+    author = inString
+    # Do something with the string
+    print('Author is: ',author)
+    return
 
+def storeString2(inString):
+    global filename
+    filename = inString
+    # Do something with the string
+    print('filename is: ',filename)
+    return
 
-filename = sys.argv[0]
-author = sys.argv[1]
-type = sys.argv[2]
-
+def storeString3(inString):
+    global type
+    type = inString
+    # Do something with the string
+    print('type is: ',type)
+    return
+print('phase 1')
+get_values()
+print('phase 2')
 # Hash the file
 h  = sha256()
 b  = bytearray(128*1024)
@@ -24,7 +45,7 @@ fileHash = h.hexdigest()
 # Hash author name
 authorHash = sha256(author.encode("utf-8")).hexdigest()
 
-# Hash type
+# Hash typeleo
 typeHash = sha256(type.encode("utf-8")).hexdigest()
 
 # Hash
